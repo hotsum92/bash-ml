@@ -1,0 +1,80 @@
+#!/usr/bin/env python
+
+import argparse
+import os
+import joblib
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn import preprocessing as pp
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import log_loss
+from sklearn.metrics import precision_recall_curve, average_precision_score
+from sklearn.metrics import roc_curve, auc, roc_auc_score
+
+parser = argparse.ArgumentParser()
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument('file_path')
+parser.add_argument('-Y')
+parser.add_argument('--sav')
+
+args = parser.parse_args()
+y_column = args.Y
+save = args.sav
+
+file_path = args.file_path
+
+data = pd.read_csv(file_path)
+
+if y_column is None:
+    y_column = data.columns[-1]
+
+dataX = data.copy().drop([y_column],axis=1)
+dataY = data[y_column].copy()
+
+columns = dataX.columns
+sX = pp.StandardScaler(copy=True)
+dataX.loc[:,columns] = sX.fit_transform(data.loc[:,columns])
+
+X, y = dataX, dataY
+
+model = joblib.load(save)
+
+preds = pd.concat([y, pd.Series(model.predict_proba(X)[:,1])], axis=1)
+preds.columns = ['trueLabel', 'prediction']
+predictionsBasedOnKFoldsLogisticRegression = preds.copy()
+
+precision, recall, thresholds = \
+    precision_recall_curve(preds['trueLabel'],
+                           preds['prediction'])
+
+average_precision = average_precision_score(preds['trueLabel'],
+                                            preds['prediction'])
+
+plt.step(recall, precision, color='k', alpha=0.7, where='post')
+plt.fill_between(recall, precision, step='post', alpha=0.3, color='k')
+plt.xlabel('Recall')
+plt.ylabel('Precision')
+plt.ylim([0.0, 1.05])
+plt.xlim([0.0, 1.0])
+plt.title('Precision-Recall curve: Average Precision = {0:0.2f}'.format(
+          average_precision))
+plt.savefig('precision_recall.png')
+
+fpr, tpr, thresholds = roc_curve(preds['trueLabel'],
+                                 preds['prediction'])
+
+areaUnderROC = auc(fpr, tpr)
+
+plt.figure()
+plt.plot(fpr, tpr, color='r', lw=2, label='ROC curve')
+plt.plot([0, 1], [0, 1], color='k', lw=2, linestyle='--')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('Receiver operating characteristic: \
+          Area under the curve = {0:0.2f}'.format(areaUnderROC))
+plt.legend(loc="lower right")
+plt.savefig('roc.png')
