@@ -1,0 +1,45 @@
+#!/usr/bin/env python
+
+import argparse
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument('file_paths', nargs='+', default=[])
+parser.add_argument('--label', type=str)
+parser.add_argument('--out', type=str)
+
+args = parser.parse_args()
+
+file_paths = args.file_paths
+label = args.label
+
+data = pd.DataFrame(data=[])
+
+if len(file_paths) != 0:
+    for file_path in file_paths:
+        if not os.path.isfile(file_path):
+            raise ValueError('File not found: {}'.format(file_path))
+
+        if file_path.endswith('.sav'):
+            d = joblib.load(file_path)
+        else:
+            d = pd.read_csv(file_path)
+
+        if d.ndim > 2:
+            d = np.array([x.flatten() for x in d])
+
+        if data.empty:
+            data = d
+        else:
+            data = pd.concat([data, d])
+else:
+    data = pd.read_csv(sys.stdin)
+
+plt.scatter(data[:, 0], data[:, 1], c=data[label])
+
+os.makedirs(os.path.dirname(args.out), exist_ok=True)
+plt.savefig(args.out)

@@ -1,0 +1,75 @@
+#!/usr/bin/env python
+
+import argparse
+import pandas as pd
+import numpy as np
+import os
+import joblib
+from sklearn.cluster import KMeans
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument('file_paths', nargs='+')
+parser.add_argument('--label', type=str)
+parser.add_argument('--out', type=str)
+
+parser.add_argument('--n_clusters', type=int, default=4)
+parser.add_argument('--n_init', type=int, default=10)
+parser.add_argument('--max_iter', type=int, default=300)
+parser.add_argument('--tol', type=float, default=0.0001)
+parser.add_argument('--random_state', type=int, default=2018)
+
+args = parser.parse_args()
+
+file_paths = args.file_paths
+label = args.label
+out = args.out
+
+n_clusters = args.n_clusters
+n_init = args.n_init
+max_iter = args.max_iter
+tol = args.tol
+random_state = args.random_state
+
+kmeans = KMeans(n_clusters=n_clusters, n_init=n_init, max_iter=max_iter, tol=tol, random_state=random_state)
+
+data = pd.DataFrame(data=[])
+
+if len(file_paths) != 0:
+    for file_path in file_paths:
+        if not os.path.isfile(file_path):
+            raise ValueError('File not found: {}'.format(file_path))
+
+        if file_path.endswith('.sav'):
+            d = joblib.load(file_path)
+        else:
+            d = pd.read_csv(file_path)
+
+        if d.ndim > 2:
+            d = np.array([x.flatten() for x in d])
+
+        if data.empty:
+            data = d
+        else:
+            data = pd.concat([data, d])
+else:
+    data = pd.read_csv(sys.stdin)
+
+if label is not None:
+    labels = data.copy()[label]
+    data = data.drop([label], axis=1)
+
+kmeans.fit(data)
+result_labels = kmeans.labels_
+
+result = pd.DataFrame(data=data)
+
+if label is not None:
+    result = pd.concat([result, labels], axis=1)
+
+result = pd.concat([result, pd.DataFrame(data=result_labels, columns=['label'])], axis=1)
+
+if out is not None:
+    joblib.dump(result, out)
+else:
+    print(result.to_csv(index=False))

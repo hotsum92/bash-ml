@@ -1,0 +1,67 @@
+#!/usr/bin/env python
+
+import argparse
+import pandas as pd
+import numpy as np
+import os
+import joblib
+from sklearn.decomposition import PCA
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument('file_paths', nargs='+', default=[])
+parser.add_argument('--label', type=str)
+parser.add_argument('--out', type=str)
+
+parser.add_argument('--n_components', type=int, default=784)
+parser.add_argument('--whiten', action='store_true')
+parser.add_argument('--random_state', type=int, default=2018)
+
+args = parser.parse_args()
+
+file_paths = args.file_paths
+label = args.label
+
+n_components = args.n_components
+whiten = args.whiten
+random_state = args.random_state
+
+pca = PCA(n_components=n_components, whiten=whiten, random_state=random_state)
+
+data = pd.DataFrame(data=[])
+
+if len(file_paths) != 0:
+    for file_path in file_paths:
+        if not os.path.isfile(file_path):
+            raise ValueError('File not found: {}'.format(file_path))
+
+        if file_path.endswith('.sav'):
+            d = joblib.load(file_path)
+        else:
+            d = pd.read_csv(file_path)
+
+        if d.ndim > 2:
+            d = np.array([x.flatten() for x in d])
+
+        if data.empty:
+            data = d
+        else:
+            data = pd.concat([data, d])
+else:
+    data = pd.read_csv(sys.stdin)
+
+if label is not None:
+    labels = data.copy()[label]
+    data = data.drop([label], axis=1)
+
+result = pca.fit_transform(data)
+
+result = pd.DataFrame(data=result)
+
+if label is not None:
+    result = pd.concat([result, labels], axis=1)
+
+if args.out is not None:
+    joblib.dump(result, args.out)
+else:
+    print(result.to_csv(index=False))
